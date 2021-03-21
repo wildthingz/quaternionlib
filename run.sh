@@ -4,7 +4,7 @@
 # continue to run without compiling:        ./run.sh
 # run new without compiling:                ./run.sh -n
 
-PROJECT_NAME="test"
+PROJECT_NAME="quat2eul"
 
 ## if -c is provided change the project in cmakelists to $PROJECT_NAME
 [ "$1" == "-c" ] || [ "$1" == "-co" ] &&
