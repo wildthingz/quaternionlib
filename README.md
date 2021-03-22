@@ -1,8 +1,8 @@
-# Qauternion to Euler Angles Conversion
+# Qauternion Conversion
 
 ## Introduction
 
-Two things need to considered in converting quaternions to euler angles;
+Two things need to considered in converting quaternions to euler angles and direct cosine matrix (DCM);
  - Order of rotation
  - and singularities
 
@@ -26,7 +26,7 @@ In this code base I tackle both of these problems to produce a robust and comple
   - [Ben-Ari](https://www.weizmann.ac.il/sci-tea/benari/sites/sci-tea.benari/files/uploads/softwareAndLearningMaterials/quaternion-tutorial-2-0-1.pdf)
   - [Hughes](https://www.researchgate.net/publication/318276971_Quaternion_tofrom_Euler_Angle_of_Arbitrary_Rotation_Sequence_Direction_Cosine_Matrix_Conversion_Using_Geometric_Methods)
   - [Perumal](https://core.ac.uk/download/pdf/228833209.pdf)
-  - [euclideanspace](https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/)
+  - [euclideanspace](http://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToEuler/index.htm)
 
 ## Requirements
 

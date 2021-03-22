@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-set(PROJECT_NAME  quat2eul)
+set(PROJECT_NAME  quaternion)
 
 project(${PROJECT_NAME})
 
@@ -12,4 +12,4 @@ link_directories(src)
 add_subdirectory(src)
 
 add_executable(${PROJECT_NAME} src/main.cpp) 
-target_link_libraries(${PROJECT_NAME} PRIVATE quat2eullib)
+target_link_libraries(${PROJECT_NAME} PRIVATE quaternionlib)

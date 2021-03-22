@@ -1,5 +1,6 @@
-set(quat2eullib_files
-        quat2eul.cpp
+set(quaternionlib_files
+        quaternion.cpp
+        utilities.cpp
         )
 
-add_library(quat2eullib ${quat2eullib_files})
+add_library(quaternionlib ${quaternionlib_files})
