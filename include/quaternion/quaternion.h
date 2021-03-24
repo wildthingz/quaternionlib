@@ -1,8 +1,12 @@
 #ifndef _QUATERNION_H_
 #define _QUATERNION_H_
 
-#include <iostream>
+#include <vector>
 #include <Eigen/Dense>
+
+// #ifndef _VERBOSE_
+// #define _VERBOSE_
+// #endif
 
 namespace QuatLib
 {
@@ -45,20 +49,26 @@ namespace QuatLib
     };
 
     rotation_axis get_rotation_vector(rotation_order &rot_ord);
+    euler_angles derivative_extrapolation(std::vector<euler_angles> &euls);
+    euler_angles lagrange_extrapolation(std::vector<euler_angles> &euls);
+    euler_angles complex_extrapolation(std::vector<euler_angles> &euls);
 
     class Quaternion
     {
     public:
-        euler_angles toEul(euler_angles &prev_eul);
-        rotation_matrix torotation_matrix(rotation_matrix &prev_rotation_matrix);
+        euler_angles to_eul(std::vector<euler_angles> &prev_euls);
+        rotation_matrix to_rotation_matrix();
 
         Eigen::Quaterniond quat;
         rotation_order rot_ord;
         rotation_axis rot_vecs;
 
         Quaternion(euler_angles &eul, rotation_order &rot_ord);
-        Quaternion(rotation_matrix &prev_rotation_matrix, rotation_order &rot_ord);
+        Quaternion(rotation_matrix &rotation_matrix, rotation_order &rot_ord);
         Quaternion(Eigen::Quaterniond &q, rotation_order &rot_ord);
+
+        bool operator==(const Quaternion &quat) const;
+        bool operator==(const Eigen::Quaterniond &quat) const;
     };
 
 } // namespace QuatLib

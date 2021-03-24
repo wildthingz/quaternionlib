@@ -11,5 +11,5 @@ include_directories(${EIGEN3_INCLUDE_DIR} include/${PROJECT_NAME})
 link_directories(src)
 add_subdirectory(src)
 
-add_executable(${PROJECT_NAME} src/main.cpp) 
+add_executable(${PROJECT_NAME} tests/test.cpp) 
 target_link_libraries(${PROJECT_NAME} PRIVATE quaternionlib)
