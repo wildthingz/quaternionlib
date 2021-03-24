@@ -1,4 +1,4 @@
-# Qauternion Conversion
+# Quaternion Conversion
 
 ## Introduction
 
