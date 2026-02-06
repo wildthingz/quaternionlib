@@ -1,0 +1,37 @@
+stages:
+  - build_and_test
+
+variables:
+  # Prevent interactive prompts during apt install
+  DEBIAN_FRONTEND: noninteractive
+
+build_and_test:
+  # Use a standard Ubuntu image that supports modern C++ and Python
+  image: ubuntu:22.04
+  stage: build_and_test
+
+  before_script:
+    # 1. Install System Dependencies
+    #    We need cmake, compiler (build-essential), python, and git
+    - apt-get update -q
+    - apt-get install -y build-essential cmake python3 python3-pip python3-venv git
+
+    # 2. Set up Python Environment (Virtual Environment)
+    #    Using a venv is best practice to avoid conflicts with system packages
+    - python3 -m venv .venv
+    - source .venv/bin/activate
+    - pip install --upgrade pip
+    - pip install pytest numpy scipy
+
+  script:
+    # 3. Configure CMake
+    #    FetchContent will automatically download Eigen, GTest, Pybind11 here
+    - cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+    # 4. Build the Project
+    - cmake --build build --config Release
+
+    # 5. Run Tests
+    #    CTest will run the GoogleTests (C++) and the Python scripts
+    - cd build
+    - ctest --output-on-failure
