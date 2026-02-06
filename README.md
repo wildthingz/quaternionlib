@@ -39,24 +39,9 @@ This acts as a **Continuity Filter**, allowing physical systems to pass smoothly
 There are a total of 12 Euler angle rotation sequences supported by this library. They are defined as an enum in `quaternion.h`:
 
 ```cpp
-enum rotation_order
-{
-    // circular, repeated
-    eXYX,
-    eYZY,
-    eZXZ,
-    // non-circular, repeated
-    eXZX,
-    eYXY,
-    eZYZ,
-    // circular, non-repeated
-    eXYZ,
-    eYZX,
-    eZXY,
-    // non-circular, non-repeated
-    eXZY,
-    eYXZ,
-    eZYX
+enum class RotationOrder {
+    XYX, YZY, ZXZ, XZX, YXY, ZYZ, // Proper Euler
+    XYZ, YZX, ZXY, XZY, YXZ, ZYX  // Tait-Bryan
 };
 ```
 
