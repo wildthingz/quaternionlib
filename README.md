@@ -1,17 +1,42 @@
-# Quaternion Conversion
+# QuaternionLib: Continuity-Aware Euler Conversion
 
-## Introduction
+![Gimbal Lock Demo](media/output.gif)
+> **Visual Comparison:** The Red plane (Standard Library) violently snaps when Pitch hits 90°, losing orientation. The Cyan plane (QuaternionLib) maintains smooth, continuous motion using stateful history extrapolation.
 
-Two things need to be considered in converting quaternions to euler angles;
+## 1. The Theory & The Problem
 
-- Order of rotation
-- and singularities
+### The Topology Mismatch (The "Hairy Ball" Theorem)
+Rotations exist on a hypersphere ($S^3$), while Euler angles exist on a flat coordinate system ($\mathbb{R}^3$). Topologically, it is impossible to map the smooth surface of a sphere onto a flat grid without at least one point where the map "tears" or becomes singular.
 
-In this code base I tackle both of these problems to produce a robust and complete tool to do the conversion.
+In Euler angles, this tear is known as **Gimbal Lock**. When the middle rotation aligns the two outer axes (e.g., Pitch = $\pm 90^\circ$ in a Tait-Bryan sequence), one degree of freedom is lost. Mathematically, this means there are **infinite valid solutions** for the remaining angles.
+* *Example:* At the North Pole, `[Yaw: 10, Pitch: 90, Roll: 0]` describes the exact same physical orientation as `[Yaw: 20, Pitch: 90, Roll: -10]`.
 
-### Order of Rotation
+### The "Glitch" in Time-Series Data
+Standard math libraries (like Eigen or GLM) are **stateless**. When they encounter this singularity, they must make an arbitrary choice (e.g., "Always force Roll to 0").
 
-There are a total of 12 euler angle rotation sequences. I defined them as an enum in `quaternions.h`.
+In a dynamic system—like a robotic arm moving through a singularity or a camera panning straight down—this arbitrary choice creates a massive **Temporal Discontinuity**.
+
+**The Artifact:**
+* Frame $t-1$: `[Yaw: 45°, Pitch: 89°, Roll: 45°]`
+* Frame $t$ (Singularity): `[Yaw: 90°, Pitch: 90°, Roll: 0°]` *(Library forces Roll to 0)*
+* Frame $t+1$: `[Yaw: 46°, Pitch: 89°, Roll: 46°]`
+
+To a PID controller or a physics engine, this looks like the object violently snapped its wrist ($0 \rightarrow 45$) in a single microsecond. This results in **Control Spikes** in motors and **Visual Jitter** in animation.
+
+## 2. The Solution
+
+**QuaternionLib** treats Euler conversion as a **Time-Series Problem**, not just a geometric one.
+
+Instead of calculating the conversion in isolation, it maintains a history buffer of recent states. When the system approaches a singularity, it uses this history to enforce continuity:
+
+1.  **Extrapolation:** The library uses **Lagrange Polynomials** and **Derivative Estimation** to predict where the angles *should* be based on the trajectory of the last $N$ frames.
+2.  **Selection:** It solves the Gimbal Lock equation to find the infinite set of valid angles, then selects the specific solution that minimizes the error against the extrapolated prediction.
+
+This acts as a **Continuity Filter**, allowing physical systems to pass smoothly through the North/South poles without numerical glitches.
+
+## 3. Supported Rotation Sequences
+
+There are a total of 12 Euler angle rotation sequences supported by this library. They are defined as an enum in `quaternion.h`:
 
 ```cpp
 enum rotation_order
@@ -35,43 +60,30 @@ enum rotation_order
 };
 ```
 
-These show the order at which the rotations are done. The "repeated" orders are called proper euler angles and the "non-repeated" orders are called Tait-Bryan angles by convention.
+These determine the order in which rotations are applied. The "repeated" orders are commonly referred to as Proper Euler Angles, while the "non-repeated" orders are referred to as Tait-Bryan angles.
 
-### Singularities (Gimbal Lock Problem)
+## 4. Implementation Details
 
-The gimbal lock is reached when the middle rotation is at 0° for proper euler angles and ±90° for Tait-Bryan angles. This essentially causes the first order and second order rotations overlap so there would be no way of telling which one caused the actual rotation.
+I conducted a thorough review of algorithms for converting between quaternions, Euler angles, and rotation matrices. I concluded that the method proposed by Hughes is the most elegant for general geometric conversion. However, the original method does not account for the singularity (Gimbal Lock) continuity problem, and the paper contained several mathematical errors which have been corrected here.
 
-Note that this problem only arises when one tries to convert quaternion to euler angles. Rotation matrices and quaternions are immune to this.
+The core of the library is the QuatLib::Quaternion class, which serves as a wrapper around Eigen::Quaterniond. It overloads constructors to allow initialization from:
 
-There is no way of solving this if there is only one data point. However, if we have a constant stream of data, which is the case in most of the robotics and animation applications, we can find a way!
+- ```Eigen::Quaterniond```
+- ```QuatLib::euler_angles```
+- ```QuatLib::rotation_matrix```
 
-## Implementation
+### Handling Singularities
+After implementing the base Hughes method, I addressed the continuity problem by introducing prev_euls, a history vector of previous Euler angles (assuming a constant time-step).
 
-I did a thorough review of different algorithms devised to carry out the conversion between quaternions and euler angles and rotation matrices. I came to the conclusion that the method proposed by _Hughes_ is the most elegant. However, this method does not deal with the singularities (gimbal lock problem). Also the paper is poorly written and there are bunch of mistakes in the maths!
+When a singularity is detected:
 
-The main portion of the code revolves around the class `QuatLib::Quaternion` which is essentially a wrapper for `Eigen::Quaterniond`. I overload the constructor so it can be initialized using either a `Eigen::Quaterniond`, a `QuatLib::euler_angles` or a `QuatLib::rotation_matrix`. I have to two methods `to_eul` and `to_rotation_matrix`.
+1. Derivative Extrapolation: Uses the average derivative of previous points to project the next likely angle.
+2. Lagrange Extrapolation: Uses a Lagrange polynomial to fit the previous points. 
+   - Note: Lagrange interpolation can overfit noisy data, so it is weighted against the derivative method to ensure stability.
 
-After implementing and successfully testing the _Hughes_ method, I tackled the gimbal lock problem by introducing `prev_euls`, a vector of previous euler angles assuming constant time-step. This can be any number of previous data points. I then extrapolate the next data-point based on these if a singularity is detected.
+Future improvements may include a sophisticated polynomial regression algorithm (Savitzky-Golay filter) for even robust noise rejection.
 
-I'm using two methods for extrapolating the next data-point. An average derivative based extrapolation implemented as `derivative_extrapolation` and Lagrange extrapolation shown in `lagrange_extrapolation` function. A drawback of Lagrange interpolation is that it might over-fit the data so I weigh it down using the average derivative based extrapolation. I essentially calculate the extrapolated data point using both methods and take the average. 
-
-If someone is interested in making this more accurate, I have a placeholder for a more complex method. This could for instance be a sophisticated polynomial regression algorithm, refer [here](https://github.com/Kolkir/mlcpp/tree/master/polynomial_regression_eigen).
-
-## Running the Code
-
-I've setup the project so that it generates a static library you can easily use. You just need Eigen installed.
-
-I have a bash script that compiles the code and runs the test automatically. If you want to run tests make sure to change `BUILD_TYPE` to "debug" in the script.
-
-```bash
-# to compile and run:                       ./run.sh -c
-# to compile only:                          ./run.sh -co
-# continue to run without compiling:        ./run.sh
-```
-
-Please refer to `test.cpp` in tests folder to see how to use the library.  
-
-## Resources
+## 6. Resources
 
 ### Code
 
