@@ -62,26 +62,84 @@ enum rotation_order
 
 These determine the order in which rotations are applied. The "repeated" orders are commonly referred to as Proper Euler Angles, while the "non-repeated" orders are referred to as Tait-Bryan angles.
 
-## 4. Implementation Details
+## 4. Usage
+### C++ integration
+1. **CMake Setup**: Since `QuaternionLib` is a modern CMake interface library, you can include it via `add_subdirectory` or `FetchContent`:
+```cmake
+add_subdirectory(path/to/QuaternionLib)
+target_link_libraries(MyGame PRIVATE QuaternionLib::QuaternionLib)
+```
+2. **Basic Usage (Stateful)**: Use the `StatefulConverter` class to automatically manage history buffers and time-step calculations.
+
+```c++
+#include <QuaternionLib/stateful_converter.h>
+
+// 1. Initialize converter (e.g. as a member variable of your Player class)
+//    Params: Rotation Order, History Buffer Size (default 5)
+QuatLib::StatefulConverter<double> converter(QuatLib::RotationOrder::ZYX);
+
+void Update(double dt) {
+    // Get current orientation from physics engine (Eigen::Quaterniond)
+    Eigen::Quaterniond current_quat = GetPhysicsRotation();
+
+    // 2. Convert! 
+    //    Pass 'dt' (delta time) to ensure velocity calculations handle frame-rate jitter.
+    auto euler = converter.update(current_quat, dt);
+
+    // Access results (ZYX order: [0]=Yaw, [1]=Pitch, [2]=Roll)
+    double yaw   = euler.angles[0]; 
+    double pitch = euler.angles[1];
+    double roll  = euler.angles[2];
+}
+```
+### Python Integration
+1. **Building the Binding**: Ensure you have CMake installed, then build the project:
+```bash
+mkdir build && cd build
+cmake ..
+make
+# This generates quaternionlib.so (or .pyd on Windows) in the build folder
+```
+
+2. **Script Usage**
+```python
+import sys
+sys.path.append("path/to/build/folder") # Ensure python can find the .so
+import quaternionlib as ql
+import numpy as np
+
+# 1. Initialize
+converter = ql.Converter(ql.RotationOrder.ZYX)
+
+# 2. Update Loop
+#    Input quaternion must be a numpy array [x, y, z, w]
+q_coeffs = np.array([0.0, 0.707, 0.0, 0.707]) 
+dt_seconds = 0.016
+
+#    Returns an object with an .angles property (Eigen vector -> Numpy array)
+result = converter.update(q_coeffs, dt=dt_seconds)
+
+print(f"Yaw: {result.angles[0]}, Pitch: {result.angles[1]}, Roll: {result.angles[2]}")
+```
+
+## 5. Implementation Details
 
 I conducted a thorough review of algorithms for converting between quaternions, Euler angles, and rotation matrices. I concluded that the method proposed by Hughes is the most elegant for general geometric conversion. However, the original method does not account for the singularity (Gimbal Lock) continuity problem, and the paper contained several mathematical errors which have been corrected here.
 
-The core of the library is the QuatLib::Quaternion class, which serves as a wrapper around Eigen::Quaterniond. It overloads constructors to allow initialization from:
-
-- ```Eigen::Quaterniond```
-- ```QuatLib::euler_angles```
-- ```QuatLib::rotation_matrix```
-
 ### Handling Singularities
-After implementing the base Hughes method, I addressed the continuity problem by introducing prev_euls, a history vector of previous Euler angles (assuming a constant time-step).
+After implementing the base Hughes method, I addressed the continuity problem by introducing a Stateful Converter that maintains a history buffer of previous Euler angles and time-deltas ($dt$).
 
-When a singularity is detected:
+When a singularity is detected (or when aliasing checks are performed), the library employs the following logic:
 
-1. Derivative Extrapolation: Uses the average derivative of previous points to project the next likely angle.
-2. Lagrange Extrapolation: Uses a Lagrange polynomial to fit the previous points. 
-   - Note: Lagrange interpolation can overfit noisy data, so it is weighted against the derivative method to ensure stability.
+1. **Unwrapping**: All angular differences are "unwrapped" (modulo $2\pi$) to ensure the shortest rotational path is used for velocity calculations. This handles cases where an angle jumps from $359^\circ$ to $1^\circ$.
 
-Future improvements may include a sophisticated polynomial regression algorithm (Savitzky-Golay filter) for even robust noise rejection.
+2. **Velocity-Based Extrapolation**:
+
+   - **Variable Time Step**: If $dt$ is provided, the solver calculates the true angular velocity ($\omega = \Delta\theta / \Delta t$) from the previous frame and projects it forward by the current frame's $dt$. This ensures smoothness even if the application's frame rate jitters (e.g., $16ms \to 33ms$).
+
+   - **Constant Time Step**: If $dt$ is omitted, the solver assumes a uniform frame rate and extrapolates based on the raw per-frame delta.
+
+3. **Solution Selection**: The extrapolated prediction is compared against the mathematically valid geometric solutions (which are often infinite or dual in nature). The solution minimizing the Euclidean distance to the prediction is selected.
 
 ## 6. Resources
 
@@ -104,7 +162,3 @@ Future improvements may include a sophisticated polynomial regression algorithm 
 
 - [quaterions.online](https://quaternions.online/)
 - [Andre Gaschler](https://www.andre-gaschler.com/rotationconverter/)
-
-## Requirements
-
-- [Eigen](https://gitlab.com/libeigen/eigen)

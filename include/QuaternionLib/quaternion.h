@@ -13,7 +13,6 @@
 namespace QuatLib {
 
     // --- Concepts (Type Safety) ---
-    // This ensures T is a valid floating point type (float, double, long double)
     template<typename T>
     concept Scalar = std::floating_point<T>;
 
@@ -24,10 +23,6 @@ namespace QuatLib {
     // Robust epsilon/tolerance handling
     template<Scalar T>
     struct Constants {
-        // Tolerance for Gimbal Lock detection.
-        // Uses 1e-4 for float (approx 7 significant digits)
-        // Uses 1e-6 for double (approx 15 significant digits)
-        // This prevents false positives in physics engines using double precision.
         static constexpr T GimbalLockTolerance = std::is_same_v<T, float> ? static_cast<T>(1e-4) : static_cast<T>(1e-6);
     };
 
@@ -52,15 +47,9 @@ namespace QuatLib {
     template<Scalar T>
     class Quaternion {
     public:
-        // Type Aliases for clean code
         using Vec3 = Eigen::Matrix<T, 3, 1>;
         using Quat = Eigen::Quaternion<T>;
 
-        /**
-         * @brief Constructor
-         * @param q The raw Eigen quaternion (will be normalized)
-         * @param order The desired Euler rotation order
-         */
         Quaternion(const Quat& q, RotationOrder order)
             : m_quat(q.normalized()), m_order(order) {}
 
@@ -68,28 +57,23 @@ namespace QuatLib {
          * @brief Continuity-Aware Conversion
          * Uses history to extrapolate and select the best solution at singularities.
          * * @param history A view of previous Euler Angles.
-         * Can pass std::vector, std::array, or raw pointer.
+         * @param dts (Optional) A view of previous time steps (seconds).
+         * @param current_dt (Optional) The current frame's time step (seconds).
          * @return Continuity-corrected Euler Angles
          */
-        EulerAngles<T> to_eul(std::span<const EulerAngles<T>> history) const;
+        EulerAngles<T> to_eul(std::span<const EulerAngles<T>> history,
+                              std::span<const T> dts = {},
+                              T current_dt = T(0)) const;
 
-        /**
-         * @brief Standard Matrix Conversion
-         */
         RotationMatrix<T> to_rotation_matrix() const;
 
     private:
         Quat m_quat;
         RotationOrder m_order;
-
-        // Internal Helpers (Implemented in MathOps.h or below)
-        EulerAngles<T> solve_singular(const Vec3& axis_1, const Vec3& axis_3, T theta_1) const;
     };
 
 } // namespace QuatLib
 
-// Since this is a template library, we must include the implementation here
-// so the compiler can see it when the user instantiates Quaternion<double>.
 #include "details/quaternion_impl.h"
 
 #endif // QUATLIB_QUATERNION_H
